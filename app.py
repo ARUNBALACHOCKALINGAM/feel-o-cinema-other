@@ -1,9 +1,13 @@
-from flask import Flask, request, jsonify, session
+import os
+import math
+import requests
+from io import BytesIO
+from PIL import Image
+from flask import Flask, request, jsonify, session, send_file
 from flask_cors import CORS
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 from werkzeug.middleware.proxy_fix import ProxyFix
-import os
 from pymongo import MongoClient
 from dotenv import load_dotenv
 
@@ -15,28 +19,35 @@ app = Flask(__name__)
 # Fix proxy configuration
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
-# Configure CORS
-CORS(
-    app,
-    supports_credentials=True,
-    origins=["https://feel-o-cinema.vercel.app"]  # Frontend domain
-)
-
-# Session configuration
+# -----------------------------
+# 1) SESSION CONFIGURATION
+# -----------------------------
 app.config.update({
-    'SECRET_KEY': os.getenv("SECRET_KEY"),
-    'SESSION_COOKIE_SECURE': True,
-    'SESSION_COOKIE_SAMESITE': 'None',
-    'SESSION_COOKIE_HTTPONLY': True,
+    "SECRET_KEY": os.getenv("SECRET_KEY"),
+    "SESSION_COOKIE_SECURE": True,     # Ensures cookies only over HTTPS
+    "SESSION_COOKIE_SAMESITE": "None", # Required for cross-site requests
+    "SESSION_COOKIE_HTTPONLY": True,   # Disallows JS from reading cookies
 })
 
-# Add Access-Control-Allow-Credentials header
+# -----------------------------
+# 2) CORS CONFIGURATION
+# -----------------------------
+CORS(
+    app,
+    supports_credentials=True,                 # Allows sending credentials
+    origins=["https://feel-o-cinema.vercel.app"]  # Your frontend domain
+)
+
 @app.after_request
 def after_request(response):
-    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    # Explicitly allow credentials & your frontend origin
+    response.headers["Access-Control-Allow-Origin"] = "https://feel-o-cinema.vercel.app"
+    response.headers["Access-Control-Allow-Credentials"] = "true"
     return response
 
-# MongoDB Connection
+# -----------------------------
+# 3) MONGODB CONNECTION
+# -----------------------------
 try:
     client = MongoClient(os.getenv("MONGO_URI"))
     db = client[os.getenv("MONGO_DB_NAME")]
@@ -44,31 +55,36 @@ try:
 except Exception as e:
     print("Failed to connect to MongoDB:", str(e))
 
-# Google OAuth Client ID
-GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
-
-
-
-
-db = client[os.getenv("MONGO_DB_NAME")]
+# Collections
 users_collection = db["users"]
 watchlists_collection = db["watchlists"]
 journals_collection = db["journals"]
 
-
+# -----------------------------
+# 4) GOOGLE OAUTH
+# -----------------------------
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 
 @app.route("/auth/google", methods=["POST"])
 def google_auth():
     token = request.json.get("token")
     try:
-        idinfo = id_token.verify_oauth2_token(token, google_requests.Request(), GOOGLE_CLIENT_ID)
+        idinfo = id_token.verify_oauth2_token(
+            token,
+            google_requests.Request(),
+            GOOGLE_CLIENT_ID
+        )
         print("Google OAuth successful:", idinfo)
         
         user = users_collection.find_one({"email": idinfo["email"]})
         if not user:
-            user = {"email": idinfo["email"], "name": idinfo["name"]}
+            user = {
+                "email": idinfo["email"],
+                "name": idinfo["name"]
+            }
             users_collection.insert_one(user)
         
+        # Store user email in Flask session (HTTP-only cookie)
         session["user_email"] = user["email"]
         print("Session after login:", session)
         
@@ -78,12 +94,12 @@ def google_auth():
         print("Google OAuth failed:", str(e))
         return jsonify({"error": str(e)}), 401
 
-
-
+# -----------------------------
+# 5) WATCHLIST ROUTES
+# -----------------------------
 @app.route("/watchlist", methods=["POST"])
 def create_watchlist():
     user_email = session.get("user_email")
-    
     if not user_email:
         return jsonify({"error": "Unauthorized"}), 401
 
@@ -115,6 +131,7 @@ def add_movie_to_watchlist(watchlist_name):
     user_email = session.get("user_email")
     if not user_email:
         return jsonify({"error": "Unauthorized"}), 401
+    
     data = request.json
     result = watchlists_collection.update_one(
         {"name": watchlist_name, "user_email": user_email},
@@ -124,23 +141,37 @@ def add_movie_to_watchlist(watchlist_name):
         return jsonify({"message": "Movie added to watchlist"})
     return jsonify({"error": "Watchlist not found"}), 404
 
-
-
 @app.route("/watchlist", methods=["GET"])
 def get_watchlists():
     user_email = session.get("user_email")
-    print("Session:", session)  # Debugging: Print the session
+    print("Session:", session)  # Debugging
     if not user_email:
         return jsonify({"error": "Unauthorized"}), 401
     
     watchlists = list(watchlists_collection.find({"user_email": user_email}))
-   
     for watchlist in watchlists:
         watchlist["_id"] = str(watchlist["_id"])
-    
     return jsonify(watchlists)
 
-# Add Journal Entry
+@app.route("/watchlist/<name>", methods=["GET"])
+def get_watchlist(name):
+    user_email = session.get("user_email")
+    if not user_email:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    watchlist = watchlists_collection.find_one({
+        "user_email": user_email,
+        "name": name
+    })
+    if not watchlist:
+        return jsonify({"error": "Watchlist not found"}), 404
+    
+    watchlist["_id"] = str(watchlist["_id"])
+    return jsonify(watchlist)
+
+# -----------------------------
+# 6) JOURNAL ROUTES
+# -----------------------------
 @app.route("/journal", methods=["POST"], endpoint="add_journal_entry")
 def add_journal_entry():
     user_email = session.get("user_email")
@@ -159,7 +190,6 @@ def add_journal_entry():
     
     return jsonify(journal_entry)
 
-# Get Journal Entries
 @app.route("/journal", methods=["GET"], endpoint="get_journal_entries")
 def get_journal_entries():
     user_email = session.get("user_email")
@@ -169,39 +199,26 @@ def get_journal_entries():
     entries = list(journals_collection.find({"user_email": user_email}))
     for entry in entries:
         entry["_id"] = str(entry["_id"])
-    
     return jsonify(entries)
 
-
-@app.route("/watchlist/<name>", methods=["GET"])
-def get_watchlist(name):
-    user_email = session.get("user_email")
-    if not user_email:
-        return jsonify({"error": "Unauthorized"}), 401
-    
-    watchlist = watchlists_collection.find_one({
-        "user_email": user_email,
-        "name": name
-    })
-    
-    if not watchlist:
-        return jsonify({"error": "Watchlist not found"}), 404
-    
-    watchlist["_id"] = str(watchlist["_id"])
-    return jsonify(watchlist)
-
+# -----------------------------
+# 7) WATCHLIST COVER (Optional)
+# -----------------------------
 @app.route('/watchlist/<name>/cover')
 def get_watchlist_cover(name):
+    """
+    Generates a collage from up to the first 4 posters in the watchlist.
+    If none, returns a default cover.
+    """
+    from flask import send_file
     user_email = session.get("user_email")
     if not user_email:
         return jsonify({"error": "Unauthorized"}), 401
 
-    # Get watchlist movies
     watchlist = watchlists_collection.find_one({
         "user_email": user_email,
         "name": name
     })
-    
     if not watchlist:
         return jsonify({"error": "Watchlist not found"}), 404
 
@@ -213,37 +230,34 @@ def get_watchlist_cover(name):
                 posters.append(Image.open(BytesIO(response.content)))
 
     if not posters:
-        # Return default cover image
         return send_file("static/default-cover.jpg", mimetype='image/jpeg')
 
-    # Create collage
     if len(posters) == 1:
         collage = posters[0]
     else:
         # Calculate grid size
         cols = min(2, len(posters))
         rows = math.ceil(len(posters) / cols)
-        
-        # Resize images
+
         poster_size = (600, 900)
         resized = [poster.resize(poster_size) for poster in posters]
-        
-        # Create canvas
+
         collage = Image.new('RGB', (poster_size[0]*cols, poster_size[1]*rows))
-        
-        # Paste images
+
         for i, img in enumerate(resized):
             row = i // cols
             col = i % cols
             collage.paste(img, (col*poster_size[0], row*poster_size[1]))
 
-    # Save to bytes
     img_io = BytesIO()
     collage.save(img_io, 'JPEG', quality=85)
     img_io.seek(0)
     
     return send_file(img_io, mimetype='image/jpeg')
 
+# -----------------------------
+# 8) MAIN ENTRY
+# -----------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
-    app.run(debug=True,port=port)
+    app.run(host="0.0.0.0", port=port, debug=True)

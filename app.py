@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify, session
 from flask_cors import CORS
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
+from werkzeug.middleware.proxy_fix import ProxyFix
 import os
 from pymongo import MongoClient
 from dotenv import load_dotenv
@@ -10,13 +11,24 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, supports_credentials=True, origins=["https://feel-o-cinema.vercel.app"])
-app.config['SECRET_KEY'] = os.getenv("SECRET_KEY")
-app.config['SESSION_COOKIE_NAME'] = 'feel_o_cinema_session'
-app.config['SESSION_COOKIE_SECURE'] = True
-app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SAMESITE'] = 'None'
-app.config['SESSION_COOKIE_DOMAIN'] = '.onrender.com'  # Replace with your backend domain
+
+# Fix proxy configuration
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+
+# Configure CORS
+CORS(
+    app,
+    supports_credentials=True,
+    origins=["https://feel-o-cinema.vercel.app"]  # Frontend domain
+)
+
+# Session configuration
+app.config.update({
+    'SECRET_KEY': os.getenv("SECRET_KEY"),
+    'SESSION_COOKIE_SECURE': True,
+    'SESSION_COOKIE_SAMESITE': 'None',
+    'SESSION_COOKIE_HTTPONLY': True,
+})
 
 # MongoDB Connection
 client = MongoClient(os.getenv("MONGO_URI"))
@@ -26,11 +38,6 @@ watchlists_collection = db["watchlists"]
 
 # Google OAuth Client ID
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
-
-@app.after_request
-def after_request(response):
-    response.headers.add('Access-Control-Allow-Credentials', 'true')
-    return response
 
 @app.route("/auth/google", methods=["POST"])
 def google_auth():
@@ -42,9 +49,8 @@ def google_auth():
             user = {"email": idinfo["email"], "name": idinfo["name"]}
             users_collection.insert_one(user)
         
-        # Set user_email in the session
         session["user_email"] = user["email"]
-        print("Session after login:", session)  # Debugging: Print the session
+        print("Session after login:", session)
         
         user["_id"] = str(user["_id"])
         return jsonify({"message": "Login successful", "user": user})
@@ -53,7 +59,7 @@ def google_auth():
 
 @app.route("/watchlist", methods=["GET"])
 def get_watchlists():
-    print("Session in /watchlist:", session)  # Debugging: Print the session
+    print("Session in /watchlist:", session)
     user_email = session.get("user_email")
     if not user_email:
         return jsonify({"error": "Unauthorized"}), 401

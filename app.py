@@ -14,8 +14,12 @@ import requests
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, supports_credentials=True)
+CORS(app, supports_credentials=True,origins=["https://feel-o-cinema.vercel.app"])
 app.config['SECRET_KEY'] = os.getenv("SECRET_KEY")
+app.config['SESSION_COOKIE_NAME'] = 'feel_o_cinema_session'
+app.config['SESSION_COOKIE_SECURE'] = True  # Ensure cookies are only sent over HTTPS
+app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevent client-side JavaScript from accessing the cookie
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # Prevent CSRF attacks
 
 # MongoDB Connection
 client = MongoClient(os.getenv("MONGO_URI"))

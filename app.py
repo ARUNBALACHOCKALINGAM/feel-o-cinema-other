@@ -24,9 +24,10 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 # -----------------------------
 app.config.update({
     "SECRET_KEY": os.getenv("SECRET_KEY"),
-    "SESSION_COOKIE_SECURE": True,     # Ensures cookies only over HTTPS
-    "SESSION_COOKIE_SAMESITE": "None", # Required for cross-site requests
-    "SESSION_COOKIE_HTTPONLY": True,   # Disallows JS from reading cookies
+    "SESSION_COOKIE_SECURE": True,
+    "SESSION_COOKIE_SAMESITE": "None",
+    "SESSION_COOKIE_HTTPONLY": True,
+    "SESSION_COOKIE_DOMAIN": ".onrender.com",  
 })
 
 # -----------------------------

@@ -206,6 +206,22 @@ def get_journal_entries():
         entry["_id"] = str(entry["_id"])
     return jsonify(entries)
 
+
+@app.route("/watchlists", methods=["GET"])
+def get_all_watchlists():
+    """Fetch all watchlists for the logged-in user."""
+    user_email = session.get("user_email")
+    if not user_email:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    watchlists = list(watchlists_collection.find({"user_email": user_email}))
+    for watchlist in watchlists:
+        watchlist["_id"] = str(watchlist["_id"])
+    
+    return jsonify(watchlists)
+
+
+
 # -----------------------------
 # 7) WATCHLIST COVER (Optional)
 # -----------------------------

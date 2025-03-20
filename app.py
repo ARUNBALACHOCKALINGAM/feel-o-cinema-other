@@ -35,7 +35,8 @@ app.config.update({
 CORS(
     app,
     supports_credentials=True,                 # Allows sending credentials
-    origins=["https://feel-o-cinema.vercel.app"]  # Your frontend domain
+    origins=["https://feel-o-cinema.vercel.app"],# Your frontend domain
+    allow_headers=["Content-Type", "Authorization"]  # Add any other headers you require
 )
 
 @app.after_request
@@ -43,6 +44,7 @@ def after_request(response):
     # Explicitly allow credentials & your frontend origin
     response.headers["Access-Control-Allow-Origin"] = "https://feel-o-cinema.vercel.app"
     response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"  # Allow Content-Type header
     return response
 
 # -----------------------------

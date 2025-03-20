@@ -44,14 +44,17 @@ try:
 except Exception as e:
     print("Failed to connect to MongoDB:", str(e))
 
+# Google OAuth Client ID
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+
+
+
 
 db = client[os.getenv("MONGO_DB_NAME")]
 users_collection = db["users"]
 watchlists_collection = db["watchlists"]
 journals_collection = db["journals"]
 
-# Google OAuth Client ID
-GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 
 
 @app.route("/auth/google", methods=["POST"])
@@ -59,18 +62,20 @@ def google_auth():
     token = request.json.get("token")
     try:
         idinfo = id_token.verify_oauth2_token(token, google_requests.Request(), GOOGLE_CLIENT_ID)
+        print("Google OAuth successful:", idinfo)
+        
         user = users_collection.find_one({"email": idinfo["email"]})
         if not user:
             user = {"email": idinfo["email"], "name": idinfo["name"]}
             users_collection.insert_one(user)
         
-        # Set user_email in the session
         session["user_email"] = user["email"]
-        print("Session after login:", session)  # Debugging: Print the session
+        print("Session after login:", session)
         
         user["_id"] = str(user["_id"])
         return jsonify({"message": "Login successful", "user": user})
     except Exception as e:
+        print("Google OAuth failed:", str(e))
         return jsonify({"error": str(e)}), 401
 
 

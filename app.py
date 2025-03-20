@@ -4,6 +4,7 @@ import requests
 from io import BytesIO
 from PIL import Image
 from flask import Flask, request, jsonify, session, send_file
+from flask_session import Session
 from flask_cors import CORS
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
@@ -27,8 +28,10 @@ app.config.update({
     "SESSION_COOKIE_SECURE": True,
     "SESSION_COOKIE_SAMESITE": "None",
     "SESSION_COOKIE_HTTPONLY": True,
-    "SESSION_COOKIE_DOMAIN": "https://feel-o-cinema-other.onrender.com",  
+    "SESSION_COOKIE_DOMAIN": ".feel-o-cinema.vercel.app",  
 })
+
+Session(app)
 
 # -----------------------------
 # 2) CORS CONFIGURATION
@@ -43,7 +46,6 @@ CORS(
 @app.after_request
 def after_request(response):
     # Explicitly allow credentials & your frontend origin
-    response.headers["Access-Control-Allow-Origin"] = "https://feel-o-cinema.vercel.app"
     response.headers["Access-Control-Allow-Credentials"] = "true"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"  # Allow Content-Type header
     return response

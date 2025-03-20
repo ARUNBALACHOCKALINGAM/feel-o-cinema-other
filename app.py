@@ -37,7 +37,11 @@ def google_auth():
         if not user:
             user = {"email": idinfo["email"], "name": idinfo["name"]}
             users_collection.insert_one(user)
+        
+        # Set user_email in the session
         session["user_email"] = user["email"]
+        print("Session after login:", session)  # Debugging: Print the session
+        
         user["_id"] = str(user["_id"])
         return jsonify({"message": "Login successful", "user": user})
     except Exception as e:

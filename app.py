@@ -48,6 +48,7 @@ def google_auth():
 @app.route("/watchlist", methods=["POST"])
 def create_watchlist():
     user_email = session.get("user_email")
+    
     if not user_email:
         return jsonify({"error": "Unauthorized"}), 401
 
@@ -93,6 +94,7 @@ def add_movie_to_watchlist(watchlist_name):
 @app.route("/watchlist", methods=["GET"])
 def get_watchlists():
     user_email = session.get("user_email")
+    print("Session:", session)  # Debugging: Print the session
     if not user_email:
         return jsonify({"error": "Unauthorized"}), 401
     

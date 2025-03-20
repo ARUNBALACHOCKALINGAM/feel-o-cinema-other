@@ -30,7 +30,7 @@ app.config.update({
     "SESSION_COOKIE_HTTPONLY": True,
     "SESSION_COOKIE_DOMAIN": ".feel-o-cinema.vercel.app",  
 })
-
+app.config["SESSION_TYPE"] = "filesystem" 
 Session(app)
 
 # -----------------------------

@@ -43,12 +43,7 @@ def google_auth():
     except Exception as e:
         return jsonify({"error": str(e)}), 401
 
-@app.route("/recommend", methods=["POST"])
-def get_movie_recommendation():
-    mood = request.json.get("mood")
-    detected_mood = detect_emotion(mood)
-    movies = recommend_movies(detected_mood)
-    return jsonify({"mood": detected_mood, "recommended_movies": movies})
+
 
 @app.route("/watchlist", methods=["POST"])
 def create_watchlist():
